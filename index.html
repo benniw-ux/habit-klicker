@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pixel Habit-Klicker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<style>
+/* Layout: one compact widget strip, three habit tiles side by side, sized for a Notion embed (~700px) */
+:root {
+  --bg: #191919;          /* Notion dark page */
+  --tile: #1f2621;        /* green-tinted panel */
+  --line: #2f3d33;
+  --ink: #e6efe6;
+  --muted: #8fa596;
+  --green: #3fbf7f;
+  --mint: #8ff0b5;
+  --deep: #1f6b45;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-num: "VT323", "Courier New", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  font-family: var(--font-display);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 28px;
+}
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+.tag.err { color: #ff9b8a; border-color: #6b3a33; }
+.tag { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); padding: 3px 8px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+
+.tile {
+  background: var(--tile);
+  border: 2px solid var(--line);
+  box-shadow: 4px 4px 0 #0f1410;
+  padding: 14px;
+  display: grid; gap: 10px; justify-items: center;
+  min-width: 0;
+}
+.tile h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); justify-self: start; }
+
+.sprite {
+  appearance: none; border: 0; background: transparent; padding: 6px; cursor: pointer;
+  border-radius: 0; position: relative;
+  transition: transform .08s steps(2);
+}
+.sprite canvas { width: 112px; height: 112px; image-rendering: pixelated; display: block; }
+.sprite:hover { transform: translateY(-2px); }
+.sprite:active { transform: translateY(2px); }
+.sprite:focus-visible { outline: 2px dashed var(--mint); outline-offset: 2px; }
+.pop {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+  font-family: var(--font-num); font-size: 24px; color: var(--mint);
+  pointer-events: none; white-space: nowrap;
+  animation: rise .9s steps(9) forwards;
+}
+@keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -36px); } }
+
+.value { font-family: var(--font-num); font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.value small { font-size: 20px; color: var(--muted); }
+.bar { width: 100%; height: 12px; border: 2px solid var(--line); background: #141a16; padding: 1px; }
+.bar i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--green) 0 6px, var(--deep) 6px 8px); width: 0; transition: width .4s steps(8); }
+.bar.done i { background: repeating-linear-gradient(90deg, var(--mint) 0 6px, var(--green) 6px 8px); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.chip {
+  font: inherit; font-size: 13px; color: var(--ink); background: #141a16;
+  border: 2px solid var(--line); padding: 4px 8px; cursor: pointer;
+}
+.chip:hover { border-color: var(--green); }
+.chip:active { transform: translateY(1px); }
+.chip[aria-pressed="true"] { border-color: var(--mint); color: var(--mint); }
+.chip:focus-visible { outline: 2px dashed var(--mint); outline-offset: 2px; }
+
+.log { background: var(--tile); border: 2px solid var(--line); padding: 12px 14px; display: grid; gap: 8px; }
+.log-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.log h2 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.log ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--font-num); font-size: 20px; }
+.log li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 2px; }
+.log li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); font-family: var(--font-display); font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pop { animation-duration: .01s; }
+  .bar i { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Habit-Klicker</h1>
+    <span class="tag" id="status">Verbinde mit Notion …</span>
+  </header>
+
+  <div class="grid">
+    <section class="tile" aria-labelledby="h-drink">
+      <h2 id="h-drink">Trinken</h2>
+      <button class="sprite" id="btn-drink" aria-label="Glas trinken, plus 0,25 Liter"><canvas id="cv-drink" width="32" height="32"></canvas></button>
+      <div class="value"><span id="v-drink">0,00</span> <small>/ <span id="g-drink">2,5</span> l</small></div>
+      <div class="bar" id="b-drink"><i></i></div>
+      <div class="chips">
+        <button class="chip" id="d-025" data-add="0.25">Glas 0,25</button>
+        <button class="chip" id="d-05" data-add="0.5">Flasche 0,5</button>
+        <button class="chip" id="d-1" data-add="1">Flasche 1,0</button>
+      </div>
+    </section>
+
+    <section class="tile" aria-labelledby="h-read">
+      <h2 id="h-read">Lesen</h2>
+      <button class="sprite" id="btn-read" aria-label="Eine Seite gelesen"><canvas id="cv-read" width="32" height="32"></canvas></button>
+      <div class="value"><span id="v-read">0</span> <small>/ <span id="g-read">15</span> Seiten</small></div>
+      <div class="bar" id="b-read"><i></i></div>
+      <div class="chips">
+        <button class="chip" id="r-1" data-add="1">+1</button>
+        <button class="chip" id="r-5" data-add="5">+5</button>
+        <button class="chip" id="r-10" data-add="10">+10</button>
+      </div>
+    </section>
+
+    <section class="tile" aria-labelledby="h-sport">
+      <h2 id="h-sport">Sport</h2>
+      <button class="sprite" id="btn-sport" aria-label="Zuletzt gewählte Routine erneut loggen"><canvas id="cv-sport" width="32" height="32"></canvas></button>
+      <div class="value"><span id="v-sport">0</span> <small>Trainings</small></div>
+      <div class="bar" id="b-sport"><i></i></div>
+      <div class="chips" role="group" aria-label="Training loggen" id="routinen"></div>
+    </section>
+  </div>
+
+  <section class="log" aria-labelledby="h-log">
+    <div class="log-head">
+      <h2 id="h-log">Heute geloggt</h2>
+      <button class="chip" id="undo">Letzten Eintrag löschen</button>
+    </div>
+    <ul id="log-list"></ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const PAL = {1:'#cde8d0',2:'#1f6b45',3:'#3fbf7f',4:'#8ff0b5',5:'#e8f0e0',6:'#96aa9b',7:'#b8c4bc',8:'#6b7a70',9:'#2e8b57'};
+  const GOALS = { drink: 2.5, read: 15, sport: 1 };
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- pixel helpers ----------
+  function mk(id) { const c = document.getElementById(id).getContext('2d'); return c; }
+  function clear(ctx) { ctx.clearRect(0, 0, 32, 32); }
+  function px(ctx, x, y, v) { if (x < 0 || y < 0 || x > 31 || y > 31) return; ctx.fillStyle = PAL[v]; ctx.fillRect(x, y, 1, 1); }
+  function rect(ctx, x0, y0, x1, y1, v) { ctx.fillStyle = PAL[v]; ctx.fillRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1); }
+
+  // ---------- glass ----------
+  const gb = y => { const t = (y - 6) / 20; return [Math.round(8 + 2 * t), Math.round(23 - 2 * t)]; };
+  function drawGlass(ctx, level, wave, bubbles) {
+    clear(ctx);
+    level = Math.max(0, Math.min(19, Math.round(level)));
+    for (let y = 26 - level; y < 26; y++) { const [l, r] = gb(y); rect(ctx, l + 1, y, r - 1, y, 3); px(ctx, l + 2, y, 4); }
+    if (level > 0) {
+      const y = 26 - level, [l, r] = gb(y);
+      for (let x = l + 1; x < r; x++) if ((x + wave) % 4 === 0) px(ctx, x, y, 4);
+      for (let y2 = 23; y2 < 26; y2++) if (y2 >= 26 - level) { const [l2, r2] = gb(y2); rect(ctx, l2 + 3, y2, r2 - 1, y2, y2 === 25 ? 2 : 3); }
+      for (const [bx, by] of bubbles) if (by > 26 - level && by < 26) px(ctx, bx, by, 4);
+    }
+    for (let y = 6; y < 27; y++) { const [l, r] = gb(y); px(ctx, l, y, 1); px(ctx, r, y, 1); }
+    const [l, r] = gb(26); rect(ctx, l, 27, r, 27, 1); px(ctx, 9, 5, 1); px(ctx, 22, 5, 1);
+  }
+
+  // ---------- book ----------
+  function textLines(ctx, x0, x1, seed) { let i = 0; for (let y = 11; y < 22; y += 2, i++) rect(ctx, x0, y, x0 + (x1 - x0) - ((i + seed) % 3), y, 6); }
+  function drawBook(ctx, w) {
+    clear(ctx);
+    rect(ctx, 3, 10, 28, 25, 9); rect(ctx, 3, 25, 28, 25, 2);
+    rect(ctx, 5, 9, 15, 23, 5); rect(ctx, 16, 9, 26, 23, 5);
+    rect(ctx, 15, 9, 16, 24, 6); rect(ctx, 5, 23, 15, 23, 6); rect(ctx, 16, 23, 26, 23, 6);
+    textLines(ctx, 7, 13, 0); textLines(ctx, 18, 24, 1);
+    if (w === 10 || w === -10) return;
+    const lift = 10 - Math.abs(w), sign = w > 0 ? 1 : -1, base = w >= 0 ? 16 : 15, width = Math.abs(w);
+    if (width === 0) { rect(ctx, 15, 4, 16, 22, 5); rect(ctx, 15, 4, 16, 4, 1); rect(ctx, 16, 5, 16, 22, 6); return; }
+    for (let k = 0; k <= width; k++) {
+      const x = base + sign * k, rise = Math.floor(Math.floor(lift * k / width) / 2), top = 9 - rise, bot = 23 - Math.floor(rise / 2);
+      rect(ctx, x, top, x, bot, 5); px(ctx, x, top, 1); px(ctx, x, bot, 6);
+    }
+    const edge = base + sign * width, rise = Math.floor(lift / 2);
+    rect(ctx, edge, 9 - rise, edge, 23 - Math.floor(rise / 2), 1);
+  }
+
+  // ---------- dumbbell ----------
+  function drawBell(ctx, yc, spark) {
+    clear(ctx);
+    rect(ctx, 4, 29, 27, 29, 2);
+    rect(ctx, 9, yc, 22, yc, 7); rect(ctx, 9, yc + 1, 22, yc + 1, 8);
+    rect(ctx, 7, yc - 4, 9, yc + 5, 3); rect(ctx, 22, yc - 4, 24, yc + 5, 3);
+    rect(ctx, 5, yc - 3, 6, yc + 4, 2); rect(ctx, 25, yc - 3, 26, yc + 4, 2);
+    rect(ctx, 7, yc - 4, 7, yc + 4, 4); rect(ctx, 22, yc - 4, 22, yc + 4, 4);
+    rect(ctx, 14, yc, 17, yc + 1, 8);
+    if (spark) for (const [x, y] of [[4, 5], [27, 4]]) { px(ctx, x, y, 4); px(ctx, x - 1, y, 1); px(ctx, x + 1, y, 1); px(ctx, x, y - 1, 1); px(ctx, x, y + 1, 1); }
+  }
+
+
+  // ---------- Verbindung ----------
+  const q = new URLSearchParams(location.search);
+  const API = (q.get('api') || '').replace(/\/$/, '');
+  const KEY = q.get('key') || '';
+  const statusEl = document.getElementById('status');
+  const setStatus = (t, err) => { statusEl.textContent = t; statusEl.classList.toggle('err', !!err); };
+
+  async function api(path, body) {
+    const res = await fetch(API + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'X-Key': KEY, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.fehler || ('Fehler ' + res.status));
+    return data;
+  }
+
+  let S = { liter: 0, seiten: 0, trainings: 0, ziele: {}, logs: [] };
+  const goal = k => (k === 'liter' ? (S.ziele.liter || GOALS.drink) : k === 'seiten' ? (S.ziele.seiten || GOALS.read) : GOALS.sport);
+  const fmt = n => n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const ctxD = mk('cv-drink'), ctxR = mk('cv-read'), ctxS = mk('cv-sport');
+  const levelFor = l => Math.min(19, (l / goal('liter')) * 19);
+  let shownLevel = 0;
+
+  function setBar(id, ratio) { const b = document.getElementById(id); b.querySelector('i').style.width = Math.min(100, ratio * 100) + '%'; b.classList.toggle('done', ratio >= 1); }
+  function render() {
+    document.getElementById('v-drink').textContent = fmt(S.liter);
+    document.getElementById('v-read').textContent = S.seiten;
+    document.getElementById('v-sport').textContent = S.trainings;
+    document.getElementById('g-drink').textContent = goal('liter').toLocaleString('de-DE');
+    document.getElementById('g-read').textContent = goal('seiten');
+    setBar('b-drink', S.liter / goal('liter')); setBar('b-read', S.seiten / goal('seiten')); setBar('b-sport', S.trainings / goal('sport'));
+    const ul = document.getElementById('log-list'); ul.innerHTML = '';
+    if (!S.logs.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Noch nichts geloggt. Klick auf ein Symbol oder einen Button.'; ul.appendChild(li); }
+    for (const e of S.logs.slice().reverse().slice(0, 8)) {
+      const li = document.createElement('li');
+      const a = document.createElement('span'); a.textContent = e.name;
+      const b = document.createElement('span');
+      b.textContent = e.erstellt ? new Date(e.erstellt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '…';
+      li.append(a, b); ul.appendChild(li);
+    }
+    document.getElementById('undo').disabled = !S.logs.length;
+  }
+  function apply(data) {
+    S = { liter: data.liter, seiten: data.seiten, trainings: data.trainings, ziele: data.ziele || {}, logs: data.logs || [] };
+    render();
+    setStatus(data.tagGefunden ? 'Mit Notion verbunden' : 'Verbunden · kein Tageseintrag für heute gefunden', !data.tagGefunden);
+  }
+
+  function pop(btn, text) {
+    const s = document.createElement('span'); s.className = 'pop'; s.textContent = text; btn.appendChild(s);
+    setTimeout(() => s.remove(), 950);
+  }
+
+  // ---------- Animationen ----------
+  let busy = { r: false, s: false };
+  let glassTimer = null;
+  function animGlass(target) {
+    if (reduce) { shownLevel = target; drawGlass(ctxD, shownLevel, 0, []); return; }
+    clearInterval(glassTimer);
+    let i = 0; const start = shownLevel;
+    const steps = Math.max(6, Math.ceil(Math.abs(target - start)) * 2);
+    glassTimer = setInterval(() => {
+      i++; shownLevel = start + (target - start) * Math.min(1, i / steps);
+      const bub = [[14, 24 - (i * 2) % 16], [18, 22 - (i * 3) % 14], [16, 25 - (i * 2 + 5) % 18]];
+      drawGlass(ctxD, shownLevel, i, bub);
+      if (i >= steps + 4) { clearInterval(glassTimer); drawGlass(ctxD, shownLevel, 0, []); }
+    }, 70);
+  }
+  function animBook() {
+    if (reduce || busy.r) return;
+    busy.r = true; const seq = [10, 8, 5, 2, 0, -2, -5, -8, -10, 10]; let i = 0;
+    const t = setInterval(() => { drawBook(ctxR, seq[i]); i++; if (i >= seq.length) { clearInterval(t); busy.r = false; } }, 80);
+  }
+  function animBell() {
+    if (reduce || busy.s) return;
+    busy.s = true; const ys = [22, 20, 17, 14, 11, 9, 9, 9, 11, 14, 17, 20, 22]; let i = 0;
+    const t = setInterval(() => { drawBell(ctxS, ys[i], ys[i] === 9); i++; if (i >= ys.length) { clearInterval(t); busy.s = false; } }, 70);
+  }
+
+  // ---------- Loggen ----------
+  let queue = Promise.resolve();
+  function send(entry) {
+    // sofort lokal anzeigen, dann an Notion schicken (der Reihe nach)
+    S.logs.push({ name: entry.name, typ: entry.typ, menge: entry.menge });
+    if (entry.typ === 'Trinken') S.liter += entry.menge;
+    if (entry.typ === 'Lesen') S.seiten += entry.menge;
+    if (entry.typ === 'Sport') S.trainings += 1;
+    render(); setStatus('Speichere …');
+    queue = queue.then(() => api('/log', entry)).then(apply).catch(err => { setStatus('Nicht gespeichert: ' + err.message, true); load(); });
+  }
+  function drink(menge, label) {
+    send({ typ: 'Trinken', name: label, menge });
+    pop(document.getElementById('btn-drink'), '+' + fmt(menge).replace(/,?0+$/, '') + ' l');
+    animGlass(levelFor(S.liter));
+  }
+  function read(n) {
+    send({ typ: 'Lesen', name: '+' + n + (n === 1 ? ' Seite' : ' Seiten'), menge: n });
+    pop(document.getElementById('btn-read'), '+' + n);
+    animBook();
+  }
+  let routine = null;
+  function sport() {
+    if (!routine) return;
+    send({ typ: 'Sport', name: routine, menge: 1, routine });
+    pop(document.getElementById('btn-sport'), routine + '!');
+    animBell();
+  }
+
+  function buildRoutinen(list) {
+    const box = document.getElementById('routinen'); box.innerHTML = '';
+    const names = list && list.length ? list : ['Push', 'Pull', 'Beine', 'Laufen'];
+    if (!routine || !names.includes(routine)) routine = names[0];
+    names.forEach((n, i) => {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.id = 'routine-' + i; b.textContent = n;
+      b.setAttribute('aria-pressed', n === routine ? 'true' : 'false');
+      b.addEventListener('click', () => {
+        routine = n;
+        box.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+        sport();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  document.getElementById('btn-drink').addEventListener('click', () => drink(0.25, 'Glas 0,25 l'));
+  document.querySelectorAll('[data-add]').forEach(b => {
+    const v = parseFloat(b.dataset.add);
+    b.addEventListener('click', () => b.id.startsWith('d-') ? drink(v, b.textContent + ' l') : read(v));
+  });
+  document.getElementById('btn-read').addEventListener('click', () => read(1));
+  document.getElementById('btn-sport').addEventListener('click', sport);
+  document.getElementById('undo').addEventListener('click', () => {
+    setStatus('Lösche …');
+    queue = queue.then(() => api('/rueckgaengig', {})).then(d => { apply(d); animGlass(levelFor(S.liter)); })
+      .catch(err => setStatus('Löschen fehlgeschlagen: ' + err.message, true));
+  });
+
+  async function load() {
+    try {
+      const d = await api('/heute');
+      apply(d); buildRoutinen(d.routinen);
+      animGlass(levelFor(S.liter));
+    } catch (err) { setStatus('Keine Verbindung: ' + err.message, true); }
+  }
+
+  drawGlass(ctxD, 0, 0, []); drawBook(ctxR, 10); drawBell(ctxS, 22, false);
+  buildRoutinen([]); render();
+  if (!API || !KEY) setStatus('Link unvollständig: ?api=…&key=… fehlt', true);
+  else { load(); document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); }); }
+})();
+</script>
+</body>
+</html>
