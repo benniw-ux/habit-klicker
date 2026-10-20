@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kerzen-Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+:root {
+  --ink: #e9e9e7; --muted: #9b9b98; --line: #3a3a3c; --panel: #202022;
+  --amber: #e2b866;
+  --font: ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --num: "VT323", "Courier New", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: transparent; color: var(--ink); font-family: var(--font); }
+body { padding: 8px 4px; }
+.wrap { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; justify-content: center; }
+canvas { width: 120px; height: 180px; image-rendering: pixelated; display: block; }
+.side { display: grid; gap: 14px; justify-items: center; min-width: 0; }
+.modes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.mode {
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--ink); background: transparent;
+  border: 1.5px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+}
+.mode[aria-pressed="true"] { background: var(--ink); color: #191919; border-color: var(--ink); }
+.mode:focus-visible, .btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.time { font-family: var(--num); font-size: 76px; line-height: .85; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.status { font-size: 12px; color: var(--muted); min-height: 1em; }
+.controls { display: flex; gap: 8px; align-items: center; }
+.btn {
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 8px 26px;
+  border: 0; background: var(--ink); color: #191919;
+}
+.btn.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--line); padding: 8px 14px; }
+.custom { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.custom input {
+  width: 52px; font: inherit; font-size: 13px; color: var(--ink); background: var(--panel);
+  border: 1.5px solid var(--line); border-radius: 6px; padding: 4px 6px; text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="cv" width="40" height="60" aria-label="Pixel-Kerze"></canvas>
+  <div class="side">
+    <div class="modes" role="group" aria-label="Modus">
+      <button class="mode" id="m-focus" data-min="25" aria-pressed="true">Pomodoro</button>
+      <button class="mode" id="m-short" data-min="5" aria-pressed="false">Kurze Pause</button>
+      <button class="mode" id="m-long" data-min="15" aria-pressed="false">Lange Pause</button>
+    </div>
+    <div class="time" id="time">25:00</div>
+    <div class="status" id="status">Bereit</div>
+    <div class="controls">
+      <button class="btn" id="start">Start</button>
+      <button class="btn ghost" id="reset" aria-label="Zurücksetzen">↺</button>
+    </div>
+    <label class="custom" for="custom-min">Eigene Dauer <input id="custom-min" type="number" min="1" max="180" value="25"> min</label>
+  </div>
+</div>
+<script>
+(() => {
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const W = 40, H = 60;
+  const C = {
+    wax: '#e6ddc9', waxS: '#c9bea6', waxD: '#a89c84', drip: '#f2ead8',
+    dish: '#6f6f6c', dishL: '#9b9b98', dishD: '#4a4a4c', wick: '#2b2b2b',
+    f1: '#fff4c2', f2: '#ffd36b', f3: '#f2a33a', f4: '#c9632a', smoke: '#8a8a88',
+  };
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- State (überlebt Neuladen der Notion-Seite) ----------
+  let S = { total: 25 * 60, left: 25 * 60, running: false, end: 0, mode: 'm-focus', done: false };
+  try { const s = JSON.parse(localStorage.getItem('kerze') || 'null'); if (s) S = Object.assign(S, s); } catch (e) {}
+  const save = () => { try { localStorage.setItem('kerze', JSON.stringify(S)); } catch (e) {} };
+
+  // ---------- Zeichnen ----------
+  const px = (x, y, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1); };
+  const rect = (x0, y0, x1, y1, c) => { ctx.fillStyle = c; ctx.fillRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1); };
+
+  function glow(cx, cy, r, alpha) {
+    for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+      const d = Math.sqrt(x * x + y * y);
+      if (d > r) continue;
+      const a = alpha * (1 - d / r);
+      if ((x + y) % 2 === 0 || d < r * 0.5) { ctx.fillStyle = `rgba(255,190,90,${a.toFixed(3)})`; ctx.fillRect(cx + x, cy + y, 1, 1); }
+    }
+  }
+
+  function draw(frame) {
+    ctx.clearRect(0, 0, W, H);
+    const ratio = S.total ? S.left / S.total : 0;
+    const maxH = 34, minH = 3;
+    const waxH = Math.round(minH + (maxH - minH) * ratio);
+    const base = 53, top = base - waxH;
+    const lit = S.running || (!S.done && S.left < S.total);
+    const burning = S.running && !S.done;
+
+    if (burning) glow(20, top - 6, 14 + (frame % 3 === 0 ? 1 : 0), 0.18);
+
+    // Teller
+    rect(6, 54, 33, 55, C.dish); rect(8, 56, 31, 56, C.dishD); rect(6, 54, 33, 54, C.dishL);
+    rect(31, 52, 35, 53, C.dish); rect(35, 51, 36, 52, C.dishL);   // Griff
+
+    // Wachs
+    rect(13, top, 26, base, C.wax);
+    rect(24, top, 26, base, C.waxS);
+    rect(13, top, 13, base, C.waxD);
+    rect(13, top, 26, top, C.drip);
+    // Wachstropfen
+    if (waxH > 6) { rect(15, top + 1, 15, top + 4, C.drip); rect(22, top + 1, 22, top + 2, C.drip); px(22, top + 3, C.waxS); }
+    rect(12, base - 1, 27, base, C.waxS);    // geschmolzener Rand am Fuß
+
+    // Docht
+    rect(19, top - 3, 20, top - 1, C.wick);
+
+    if (burning) {
+      const v = reduce ? 0 : frame % 4;
+      const sway = [0, 1, 0, -1][v];
+      const h = [8, 9, 7, 9][v];
+      const fy = top - 4;
+      for (let i = 0; i < h; i++) {
+        const y = fy - i, w = Math.max(1, Math.round((h - i) / 2.6));
+        const sx = i > h / 2 ? sway : 0;
+        const col = i < 2 ? C.f3 : (i < h * 0.6 ? C.f2 : C.f1);
+        rect(19 + sx - w + 1, y, 20 + sx + w - 1, y, col);
+      }
+      rect(19, fy, 20, fy, C.f4);
+      px(19 + sway, fy - h, C.f1);
+    } else if (lit) {
+      // pausiert: kleine Glut
+      rect(19, top - 4, 20, top - 4, C.f4); px(19, top - 5, C.f3);
+    } else if (S.done) {
+      // Rauch
+      const t = reduce ? 0 : frame;
+      for (let i = 0; i < 6; i++) {
+        const y = top - 5 - i * 3 - (t % 3);
+        const x = 19 + Math.round(Math.sin((i + t * 0.4) * 0.9) * 2);
+        if (y > 2) { ctx.globalAlpha = 0.7 - i * 0.1; px(x, y, C.smoke); px(x + 1, y - 1, C.smoke); ctx.globalAlpha = 1; }
+      }
+    }
+  }
+
+  // ---------- Timer ----------
+  const el = id => document.getElementById(id);
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  function render() {
+    el('time').textContent = fmt(Math.max(0, Math.ceil(S.left)));
+    el('start').textContent = S.running ? 'Pause' : (S.left < S.total && !S.done ? 'Weiter' : 'Start');
+    el('status').textContent = S.done ? 'Kerze erloschen – Zeit ist um' : S.running ? 'Die Kerze brennt …' : (S.left < S.total ? 'Pausiert' : 'Bereit');
+    document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', b.id === S.mode ? 'true' : 'false'));
+  }
+  function setDuration(min, mode) {
+    S = { total: min * 60, left: min * 60, running: false, end: 0, mode: mode || S.mode, done: false };
+    save(); render();
+  }
+  function chime() {
+    try {
+      const a = new (window.AudioContext || window.webkitAudioContext)();
+      [660, 880, 990].forEach((f, i) => {
+        const o = a.createOscillator(), g = a.createGain();
+        o.frequency.value = f; o.type = 'sine';
+        g.gain.setValueAtTime(0.0001, a.currentTime + i * 0.25);
+        g.gain.exponentialRampToValueAtTime(0.2, a.currentTime + i * 0.25 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + i * 0.25 + 0.5);
+        o.connect(g).connect(a.destination); o.start(a.currentTime + i * 0.25); o.stop(a.currentTime + i * 0.25 + 0.55);
+      });
+    } catch (e) {}
+  }
+
+  el('start').addEventListener('click', () => {
+    if (S.done) setDuration(S.total / 60);
+    if (S.running) { S.left = Math.max(0, (S.end - Date.now()) / 1000); S.running = false; }
+    else { S.end = Date.now() + S.left * 1000; S.running = true; }
+    save(); render();
+  });
+  el('reset').addEventListener('click', () => setDuration(S.total / 60));
+  document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => {
+    el('custom-min').value = b.dataset.min; setDuration(+b.dataset.min, b.id);
+  }));
+  el('custom-min').addEventListener('change', e => {
+    const v = Math.max(1, Math.min(180, Math.round(+e.target.value || 25)));
+    e.target.value = v; setDuration(v, 'custom');
+  });
+
+  let frame = 0, last = 0;
+  function loop(t) {
+    if (S.running) {
+      S.left = Math.max(0, (S.end - Date.now()) / 1000);
+      if (S.left <= 0) { S.running = false; S.done = true; S.left = 0; save(); chime(); }
+      render();
+    }
+    if (t - last > 140) { frame++; last = t; draw(frame); }
+    requestAnimationFrame(loop);
+  }
+  if (S.running && S.end <= Date.now()) { S.running = false; S.done = true; S.left = 0; }
+  el('custom-min').value = Math.round(S.total / 60);
+  render(); draw(0); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
