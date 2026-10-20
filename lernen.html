@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schach & Duolingo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<style>
+/* Layout: one compact widget strip, three habit tiles side by side, sized for a Notion embed (~700px) */
+:root {
+  --bg: #191919;          /* Notion dark page */
+  --tile: #1f2621;        /* green-tinted panel */
+  --line: #2f3d33;
+  --ink: #e6efe6;
+  --muted: #8fa596;
+  --green: #3fbf7f;
+  --mint: #8ff0b5;
+  --deep: #1f6b45;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-num: "VT323", "Courier New", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body {
+  font-family: var(--font-display);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 28px;
+}
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+.tag.err { color: #ff9b8a; border-color: #6b3a33; }
+.tag { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); padding: 3px 8px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 360px) { .grid { grid-template-columns: 1fr; } }
+
+.tile {
+  background: var(--tile);
+  border: 2px solid var(--line);
+  box-shadow: 4px 4px 0 #0f1410;
+  padding: 14px;
+  display: grid; gap: 10px; justify-items: center;
+  min-width: 0;
+}
+.tile h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); justify-self: start; }
+
+.sprite {
+  appearance: none; border: 0; background: transparent; padding: 6px; cursor: pointer;
+  border-radius: 0; position: relative;
+  transition: transform .08s steps(2);
+}
+.sprite canvas { width: 96px; height: 96px; image-rendering: pixelated; display: block; }
+.sprite:hover { transform: translateY(-2px); }
+.sprite:active { transform: translateY(2px); }
+.sprite:focus-visible { outline: 2px dashed var(--mint); outline-offset: 2px; }
+.pop {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+  font-family: var(--font-num); font-size: 24px; color: var(--mint);
+  pointer-events: none; white-space: nowrap;
+  animation: rise .9s steps(9) forwards;
+}
+@keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -36px); } }
+
+.value { font-family: var(--font-num); font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+.value small { font-size: 20px; color: var(--muted); }
+.bar { width: 100%; height: 12px; border: 2px solid var(--line); background: #141a16; padding: 1px; }
+.bar i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--green) 0 6px, var(--deep) 6px 8px); width: 0; transition: width .4s steps(8); }
+.bar.done i { background: repeating-linear-gradient(90deg, var(--mint) 0 6px, var(--green) 6px 8px); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.chip {
+  font: inherit; font-size: 13px; color: var(--ink); background: #141a16;
+  border: 2px solid var(--line); padding: 4px 8px; cursor: pointer;
+}
+.chip:hover { border-color: var(--green); }
+.chip:active { transform: translateY(1px); }
+.chip[aria-pressed="true"] { border-color: var(--mint); color: var(--mint); }
+.chip:focus-visible { outline: 2px dashed var(--mint); outline-offset: 2px; }
+
+.log { background: var(--tile); border: 2px solid var(--line); padding: 12px 14px; display: grid; gap: 8px; }
+.log-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.log h2 { margin: 0; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.log ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--font-num); font-size: 20px; }
+.log li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 2px; }
+.log li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); font-family: var(--font-display); font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pop { animation-duration: .01s; }
+  .bar i { transition: none; }
+}
+.value { font-size: 20px; text-align: center; }
+.chip[disabled] { opacity: .5; cursor: default; }
+.wrap { max-width: 520px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Lernen &amp; Spielen</h1>
+    <span class="tag" id="status">Verbinde mit Notion …</span>
+  </header>
+  <div class="grid">
+    <section class="tile" aria-labelledby="h-chess">
+      <h2 id="h-chess">Schach</h2>
+      <button class="sprite" id="btn-chess" aria-label="Spiel gespielt"><canvas id="cv-chess" width="32" height="32"></canvas></button>
+      <div class="value"><span id="v-games">0</span> <small>Spiele</small> · <span id="v-lessons">0</span> <small>Lekt.</small></div>
+      <div class="chips">
+        <button class="chip" id="c-game">Spiel gespielt</button>
+        <button class="chip" id="c-lesson">Lektion gelernt</button>
+      </div>
+    </section>
+    <section class="tile" aria-labelledby="h-duo">
+      <h2 id="h-duo">Duolingo</h2>
+      <button class="sprite" id="btn-duo" aria-label="Duolingo erledigt"><canvas id="cv-duo" width="32" height="32"></canvas></button>
+      <div class="value" id="v-duo"><small>Noch offen</small></div>
+      <div class="chips">
+        <button class="chip" id="c-duo">Erledigt</button>
+      </div>
+    </section>
+  </div>
+  <div class="log-head"><span></span><button class="chip" id="undo">Letzten Eintrag löschen</button></div>
+</div>
+<script>
+(() => {
+  const PAL = {1:'#cde8d0',2:'#1f6b45',3:'#3fbf7f',4:'#8ff0b5',5:'#e8f0e0',6:'#96aa9b',7:'#b8c4bc',8:'#6b7a70'};
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ctxC = document.getElementById('cv-chess').getContext('2d');
+  const ctxD = document.getElementById('cv-duo').getContext('2d');
+  const px = (c, x, y, v) => { if (x < 0 || y < 0 || x > 31 || y > 31) return; c.fillStyle = PAL[v]; c.fillRect(x, y, 1, 1); };
+  const rect = (c, x0, y0, x1, y1, v) => { c.fillStyle = PAL[v]; c.fillRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1); };
+
+  // ---------- Springer ----------
+  const KNIGHT = [
+    "......oo........",
+    ".....obbo.......",
+    "....obbbbo......",
+    "...obbebbbo.....",
+    "..obbbbbbbbo....",
+    ".obbbbbbbbbso...",
+    "obbbbbbbbbbso...",
+    "obbboo.obbbso...",
+    ".ooo..obbbbso...",
+    "......obbbbso...",
+    ".....obbbbbso...",
+    "....obbbbbbso...",
+    "...obbbbbbbso...",
+    "...obbbbbbbso...",
+    "..oooooooooooo..",
+    "..obbbbbbbbbso..",
+    ".oooooooooooooo.",
+    ".obbbbbbbbbbbso.",
+    ".oooooooooooooo.",
+  ];
+  const KC = { o: 2, b: 5, s: 6, e: 2 };
+  function drawChess(dy, spark) {
+    ctxC.clearRect(0, 0, 32, 32);
+    for (let i = 0; i < 8; i++) rect(ctxC, i * 4, 28, i * 4 + 3, 31, i % 2 ? 2 : 3);
+    KNIGHT.forEach((row, y) => [...row].forEach((ch, x) => { if (KC[ch]) px(ctxC, 8 + x, 9 + y + dy, KC[ch]); }));
+    if (spark) for (const [x, y] of spark) { px(ctxC, x, y, 4); px(ctxC, x - 1, y, 1); px(ctxC, x + 1, y, 1); px(ctxC, x, y - 1, 1); px(ctxC, x, y + 1, 1); }
+  }
+
+  // ---------- Sprechblase ----------
+  function drawDuo(done, step, dotPhase) {
+    ctxD.clearRect(0, 0, 32, 32);
+    rect(ctxD, 5, 6, 26, 21, 2); rect(ctxD, 4, 7, 27, 20, 2);
+    rect(ctxD, 5, 5, 26, 5, 1); rect(ctxD, 5, 22, 26, 22, 1); rect(ctxD, 3, 7, 3, 20, 1); rect(ctxD, 28, 7, 28, 20, 1);
+    px(ctxD, 4, 6, 1); px(ctxD, 27, 6, 1); px(ctxD, 4, 21, 1); px(ctxD, 27, 21, 1);
+    rect(ctxD, 8, 23, 10, 23, 2); rect(ctxD, 8, 24, 9, 24, 2); px(ctxD, 8, 25, 2);  // Zipfel
+    px(ctxD, 7, 23, 1); px(ctxD, 7, 24, 1); px(ctxD, 7, 25, 1); px(ctxD, 8, 26, 1); px(ctxD, 9, 25, 1); px(ctxD, 10, 24, 1); px(ctxD, 11, 23, 1);
+    if (!done) {
+      [10, 15, 20].forEach((x, i) => rect(ctxD, x, 13 - (dotPhase === i ? 1 : 0), x + 1, 14 - (dotPhase === i ? 1 : 0), 4));
+    } else {
+      const pts = [[9, 13], [10, 14], [11, 15], [12, 16], [13, 17], [14, 16], [15, 15], [16, 14], [17, 13], [18, 12], [19, 11], [20, 10], [21, 9], [22, 8]];
+      pts.slice(0, step).forEach(([x, y]) => { rect(ctxD, x, y, x + 1, y + 1, 4); });
+    }
+  }
+
+  // ---------- Verbindung ----------
+  const q = new URLSearchParams(location.search);
+  const API = (q.get('api') || '').replace(/\/$/, ''), KEY = q.get('key') || '';
+  const OWN = ['Schach', 'Duolingo'];
+  const statusEl = document.getElementById('status');
+  const setStatus = (t, err) => { statusEl.textContent = t; statusEl.classList.toggle('err', !!err); };
+  async function api(path, body) {
+    const res = await fetch(API + path, { method: body ? 'POST' : 'GET', headers: { 'X-Key': KEY, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.fehler || ('Fehler ' + res.status));
+    return data;
+  }
+
+  let S = { games: 0, lessons: 0, duo: false };
+  function render() {
+    document.getElementById('v-games').textContent = S.games;
+    document.getElementById('v-lessons').textContent = S.lessons;
+    document.getElementById('v-duo').innerHTML = S.duo ? 'Heute erledigt ✓' : '<small>Noch offen</small>';
+    document.getElementById('c-duo').disabled = S.duo;
+  }
+  function apply(d) {
+    S = { games: d.schachSpiele || 0, lessons: d.schachLektionen || 0, duo: !!d.duolingo };
+    render(); if (!duoAnim) drawDuo(S.duo, 14, -1);
+    setStatus(d.tagGefunden ? 'Mit Notion verbunden' : 'Kein Tageseintrag für heute', !d.tagGefunden);
+  }
+  function pop(btn, text) {
+    const s = document.createElement('span'); s.className = 'pop'; s.textContent = text; btn.appendChild(s);
+    setTimeout(() => s.remove(), 950);
+  }
+  let queue = Promise.resolve();
+  function send(entry) {
+    setStatus('Speichere …');
+    queue = queue.then(() => api('/log', entry)).then(apply).catch(e => { setStatus('Nicht gespeichert: ' + e.message, true); load(); });
+  }
+
+  // ---------- Animationen ----------
+  let chessAnim = false, duoAnim = false;
+  function hop(spark) {
+    if (reduce || chessAnim) return;
+    chessAnim = true; const seq = [0, -2, -4, -5, -5, -4, -2, 0, 0]; let i = 0;
+    const t = setInterval(() => {
+      drawChess(seq[i], spark && i >= 3 && i <= 6 ? [[4, 6], [27, 5], [26, 14]] : null);
+      if (++i >= seq.length) { clearInterval(t); chessAnim = false; drawChess(0); }
+    }, 70);
+  }
+  function duoDone() {
+    if (reduce) { drawDuo(true, 14, -1); return; }
+    duoAnim = true; let s = 0;
+    const t = setInterval(() => { drawDuo(true, ++s, -1); if (s >= 14) { clearInterval(t); duoAnim = false; } }, 45);
+  }
+  let dot = 0;
+  setInterval(() => { if (!S.duo && !duoAnim && !reduce) drawDuo(false, 0, (dot = (dot + 1) % 4)); }, 400);
+
+  // ---------- Aktionen ----------
+  function game() { S.games++; render(); pop(document.getElementById('btn-chess'), '+1 Spiel'); hop(false); send({ typ: 'Schach', name: 'Spiel gespielt', menge: 1 }); }
+  function lesson() { S.lessons++; render(); pop(document.getElementById('btn-chess'), '+1 Lektion'); hop(true); send({ typ: 'Schach', name: 'Lektion gelernt', menge: 1 }); }
+  function duo() {
+    if (S.duo) { pop(document.getElementById('btn-duo'), 'schon erledigt'); return; }
+    S.duo = true; render(); pop(document.getElementById('btn-duo'), 'Erledigt!'); duoDone();
+    send({ typ: 'Duolingo', name: 'Duolingo erledigt', menge: 1 });
+  }
+  document.getElementById('btn-chess').addEventListener('click', game);
+  document.getElementById('c-game').addEventListener('click', game);
+  document.getElementById('c-lesson').addEventListener('click', lesson);
+  document.getElementById('btn-duo').addEventListener('click', duo);
+  document.getElementById('c-duo').addEventListener('click', duo);
+  document.getElementById('undo').addEventListener('click', () => {
+    setStatus('Lösche …');
+    queue = queue.then(() => api('/rueckgaengig', { typen: OWN })).then(apply).catch(e => setStatus('Löschen fehlgeschlagen: ' + e.message, true));
+  });
+
+  async function load() { try { apply(await api('/heute')); } catch (e) { setStatus('Keine Verbindung: ' + e.message, true); } }
+  drawChess(0); drawDuo(false, 0, 0); render();
+  if (!API || !KEY) setStatus('Link unvollständig: ?api=…&key=… fehlt', true);
+  else { load(); document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); }); }
+})();
+</script>
+</body>
+</html>

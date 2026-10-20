@@ -250,7 +250,7 @@ h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: .02em; }
     document.getElementById('undo').disabled = !S.logs.length;
   }
   function apply(data) {
-    S = { liter: data.liter, seiten: data.seiten, trainings: data.trainings, ziele: data.ziele || {}, logs: data.logs || [] };
+    S = { liter: data.liter, seiten: data.seiten, trainings: data.trainings, ziele: data.ziele || {}, logs: (data.logs || []).filter(l => ['Trinken', 'Lesen', 'Sport'].includes(l.typ)) };
     render();
     setStatus(data.tagGefunden ? 'Mit Notion verbunden' : 'Verbunden · kein Tageseintrag für heute gefunden', !data.tagGefunden);
   }
@@ -341,7 +341,7 @@ h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: .02em; }
   document.getElementById('btn-sport').addEventListener('click', sport);
   document.getElementById('undo').addEventListener('click', () => {
     setStatus('Lösche …');
-    queue = queue.then(() => api('/rueckgaengig', {})).then(d => { apply(d); animGlass(levelFor(S.liter)); })
+    queue = queue.then(() => api('/rueckgaengig', { typen: ['Trinken', 'Lesen', 'Sport'] })).then(d => { apply(d); animGlass(levelFor(S.liter)); })
       .catch(err => setStatus('Löschen fehlgeschlagen: ' + err.message, true));
   });
 
